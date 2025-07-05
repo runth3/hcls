@@ -151,6 +151,10 @@ const AKSES_PORTAL = {
 |------|-----------|-------|
 | **MEMBER** | Anggota individu | Klaim, Polis, Kartu, Direktori, Statusehat |
 
+### 3.2.5 Additional Roles
+- **LEXICON_USER**: Access to health profile data for clinical integration (BRD-7).
+- **FUTURE_APP_USER**: Placeholder for future app integrations.
+
 ### 3.3 Kontrol Akses Kontekstual
 - **Definisi**: Aturan akses berbasis konteks (jumlah klaim, klien, provider, waktu, jenis klaim) disimpan dalam kolom JSONB untuk fleksibilitas.
 - **Contoh Skenario (John - Claims Processor)**:
@@ -274,6 +278,24 @@ export default async function handler(req, res) {
   // Lanjutkan ke API atau route
 }
 ```
+### 3.4.6 WebSocket Authentication
+- **FR-WS-001**: Authenticate WebSocket connections using JWT from NextAuth.js.
+- **FR-WS-002**: Authorize WebSocket access via AuthorizationService, checking `portal:access:ws` permission.
+- **Example**:
+```typescript
+WS /ws/auth
+// Authenticates WebSocket connection
+// Response: { status: "authenticated", userId: string, roles: string[] }
+```
+### 3.4.7 Notification System
+- **FR-NOTIF-001**: Send email/SMS notifications for bulk upload completion (BRD-2).
+- **FR-NOTIF-002**: Integrate with local SMS providers (e.g., Twilio Indonesia) and email services.
+- **API**:
+```typescript
+POST /api/notifications/email
+// Payload: { userId: string, subject: string, message: string }
+POST /api/notifications/sms
+// Payload: { userId: string, phone: string, message: string }
 
 ---
 
