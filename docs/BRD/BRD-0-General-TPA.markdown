@@ -1,7 +1,7 @@
 # Business Requirement Document (BRD) - Aplikasi Third Party Administration (TPA)
 
-**Tanggal**: 5 July 2025  
-**Versi**: 5.6 (Updated for Call Center Apps, Client Portal, Member Portal/Mobile Apps, Hospital Portal, Satu Sehat, Lexicon)  
+**Tanggal**: 6 July 2025  
+**Versi**: 5.7 (Updated to Remove Premiums, Focus on Claims Payments and Admin Fees)  
 **Dibuat oleh**: Tim Pengembangan  
 **Disetujui oleh**: [TBD - Pemangku Kepentingan]  
 **Project Start**: 1 July 2025  
@@ -14,23 +14,23 @@
 ### 1.1 Tujuan Dokumen
 Dokumen ini mendefinisikan kebutuhan bisnis untuk aplikasi Third Party Administration (TPA) berbasis web menggunakan Next.js dengan arsitektur modular. Fitur utama meliputi:
 - Bulk upload untuk data client, member, dan polis.
-- Workflow membership terintegrasi: pendaftaran client, pembuatan polis, pengajuan klaim, validasi provider, hingga pembayaran.
+- Workflow membership terintegrasi: pendaftaran client, pembuatan polis, pengajuan klaim, validasi provider, hingga pembayaran klaim.
 - **Unified product architecture** (`product_type`: indemnity, managed_care, aso) dengan JSONB configuration (BRD-3 v2.2).
-- Fitur khusus TPA: COB, co-payment, deductibles, out-of-pocket maximums, reinsurance, stop-loss, subrogation, **pre-authorization**, **pre-hospitalization**, **call center interaction logging**.
+- Fitur khusus TPA: Coordination of Benefits (COB), co-payment, deductibles, out-of-pocket maximums, reinsurance, stop-loss, subrogation, **pre-authorization**, **pre-hospitalization**, **call center interaction logging**.
 - Ekstensi: **Client Portal**, **Member Portal/Mobile Apps**, **Hospital Portal**, **Call Center Apps**, statusehat, clinical pathway, **Satu Sehat webhook integration**, **Lexicon for claim pathways**, pembayaran lokal.
-- Kepatuhan terhadap UU PDP, HIPAA, HL7/FHIR.
+- Kepatuhan terhadap UU PDP, HIPAA, HL7/FHIR, OJK.
 
 ### 1.2 Latar Belakang
-Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager, member, dependent, provider (incl. hospitals), broker/agent, dan auditor. Integrasi dengan BPJS, **Satu Sehat (webhooks)**, e-wallet, dan WhatsApp memastikan relevansi lokal. **Call Center Apps** mencatat semua interaksi (telepon, WhatsApp, web form, langsung). Diuji dengan simulasi perusahaan nyata (Bank Mandiri, BUMN, Astra Group) untuk skala 200,000+ karyawan.
+Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager, member, dependent, provider (incl. hospitals), broker/agent, dan auditor. Integrasi dengan BPJS Kesehatan, **Satu Sehat (webhooks)**, e-wallet (GoPay, OVO, DANA), dan WhatsApp memastikan relevansi lokal. **Call Center Apps** mencatat interaksi (telepon, WhatsApp, web form, langsung). Diuji dengan simulasi perusahaan nyata (Bank Mandiri, BUMN, Astra Group) untuk skala 200,000+ karyawan.
 
 ### 1.3 Ruang Lingkup
 **Modul Inti (LIVE):**
 - **Manajemen Pengguna**: RBAC + ABAC, 9 peran (BRD-1 v4.2, SRS-1 v2.3).
 - **Manajemen Anggota**: Hierarki client, product catalog (BRD-2 v3.3).
-- **Manajemen Polis**: Unified product architecture (BRD-3 v2.2).
+- **Manajemen Polis**: Unified product architecture with admin fees for ASO (BRD-3 v2.2).
 - **Manajemen Klaim**: Pre-auth, pre-hospitalization, COB, clinical pathway (BRD-4).
 - **Manajemen Penyedia**: Capitation, provider scoring (BRD-5).
-- **Manajemen Keuangan**: Billing, e-wallet, tax compliance (BRD-6, Ready).
+- **Manajemen Keuangan**: Claims payments, admin fees, e-wallet integration, tax compliance (BRD-6, Ready).
 
 **Modul Ekstensi (Planned):**
 - **Client Portal**, **Member Portal/Mobile Apps**, **Hospital Portal**, **Call Center Apps**, Satu Sehat, Lexicon, WhatsApp, Local Payment, Eligibility, Fraud Detection, etc.
@@ -53,7 +53,7 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 - **Call Center Apps** untuk log interaksi, mendukung pre-auth dan pre-hospitalization.
 - **Client/Member/Hospital Portals** untuk user engagement.
 - **Satu Sehat** dan **Lexicon** untuk integrasi dan claim pathways.
-- Kepatuhan UU PDP, HIPAA, HL7/FHIR.
+- Kepatuhan UU PDP, HIPAA, HL7/FHIR, OJK.
 
 ### 2.2 Manfaat Bisnis
 - **Efisiensi**: 90% pengurangan tenaga kerja manual.
@@ -69,16 +69,59 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 - **Fitur**: Pengajuan klaim, **pre-authorization** (Managed Care), **pre-hospitalization** (clinical pathway), COB, co-payment, deductibles, subrogation. Interaksi logged via Call Center Apps.
 - **BRD**: BRD-4.
 
+#### 3.1.6 Modul Manajemen Keuangan (📋 Ready)
+- **Fitur**:
+  - Claims payments to providers via e-wallets (GoPay, OVO, DANA) or bank transfers.
+  - Administrative fees for ASO plans, calculated via `configuration.aso_controls` (BRD-3).
+  - Tax compliance (PPN, PPh 21, NPWP validation).
+  - Financial reconciliation with claims (BRD-4) and policies (BRD-3).
+- **Database Schema** (High-Level):
+  ```sql
+  CREATE TABLE claims_payments (
+    id UUID PRIMARY KEY,
+    claim_id UUID REFERENCES claims(id),
+    provider_id UUID REFERENCES providers(id),
+    amount DECIMAL(15,2),
+    currency VARCHAR(3) DEFAULT 'IDR',
+    payment_date DATE,
+    e_wallet_transaction_id UUID REFERENCES e_wallet_transactions(id),
+    tax_details JSONB, -- e.g., {"ppn": 0.11, "pph21": 0.05, "npwp": "123456789"}
+    status VARCHAR(50), -- pending, paid, rejected
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+  CREATE TABLE e_wallet_transactions (
+    id UUID PRIMARY KEY,
+    wallet_type VARCHAR(50), -- GoPay, OVO, DANA
+    amount DECIMAL(15,2),
+    npwp VARCHAR(20),
+    status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+  CREATE TABLE admin_fees (
+    id UUID PRIMARY KEY,
+    policy_id UUID REFERENCES policies(id),
+    client_id UUID REFERENCES clients(id),
+    amount DECIMAL(15,2),
+    currency VARCHAR(3) DEFAULT 'IDR',
+    due_date DATE,
+    status VARCHAR(50), -- pending, paid, overdue
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+  ```
+- **BRD**: BRD-6.
+
 #### 3.1.14 Modul Portal Client (📋 Planned)
-- **Fitur**: Dashboard untuk member, policy, claim utilization; bulk upload; **pre-auth monitoring**, **pre-hospitalization tracking**. Interaksi logged via Call Center Apps.
+- **Fitur**: Dashboard untuk member management, claim utilization, pre-auth monitoring, pre-hospitalization tracking. Interaksi logged via Call Center Apps.
 - **BRD**: BRD-PortalClient.
 
 #### 3.1.15 Modul Portal Member/Mobile Apps (📋 Planned)
-- **Fitur**: Policy selection, claim submission, **pre-auth requests**, **pre-hospitalization document uploads**, statusehat. Interaksi logged via Call Center Apps.
+- **Fitur**: Claim submission, pre-auth requests, pre-hospitalization document uploads, statusehat. Interaksi logged via Call Center Apps.
 - **BRD**: BRD-PortalMember, BRD-MobileApps.
 
 #### 3.1.17 Modul Hospital Portal (📋 Planned)
-- **Fitur**: **Pre-auth**, **pre-hospitalization data** submission, claims, Satu Sehat integration. Interaksi logged via Call Center Apps.
+- **Fitur**: Pre-auth, pre-hospitalization data submission, claims, Satu Sehat integration. Interaksi logged via Call Center Apps.
 - **BRD**: BRD-HospitalPortal.
 
 #### 3.1.25 Modul Call Center Apps (📋 Planned)
@@ -86,39 +129,39 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
   - Log incoming/outgoing interactions (phone, WhatsApp, web form, direct).
   - Categorize interactions (e.g., inquiry, complaint, pre-auth, claim status).
   - Integration with BRD-4 (claims), BRD-3 (policies), BRD-1 (authentication).
-  - Support pre-auth/pre-hospitalization inquiries.
   - Audit trails for UU PDP/HIPAA.
 - **BRD**: BRD-CallCenter.
 
 #### 3.1.8 Modul Integrasi Eksternal (📋 Planned)
-- **Fitur**: HL7/FHIR, **Satu Sehat webhooks** for pre-auth/pre-hospitalization data, logged in Call Center Apps.
+- **Fitur**: HL7/FHIR, Satu Sehat webhooks for pre-auth/pre-hospitalization data, logged in Call Center Apps.
 - **BRD**: BRD-Integrations.
 
 #### 3.1.7 Modul Lexicon (📋 Planned)
-- **Fitur**: Health profiles, **claim pathway management** (pre-auth, pre-hospitalization). Interaksi logged via Call Center Apps.
+- **Fitur**: Health profiles, claim pathway management (pre-auth, pre-hospitalization). Interaksi logged via Call Center Apps.
 - **BRD**: BRD-7.
 
 ---
 
 ## 4. Spesifikasi Non-Fungsional
-- **Keamanan**: AES-256, RBAC + ABAC, audit logs for Call Center Apps, UU PDP/HIPAA.
-- **Performa**: API < 2s (95%), pre-auth < 2s, call log entry < 1s.
+- **Keamanan**: AES-256, RBAC + ABAC, audit logs for Call Center Apps, UU PDP/HIPAA/OJK.
+- **Performa**: API < 2s (95%), claims payment < 2s, call log entry < 1s.
 - **Skalabilitas**: Microservices, AWS, Redis for Call Center Apps and portals.
 - **Usability**: Responsive, multibahasa, WCAG 2.1.
-- **Integrasi**: Satu Sehat, BPJS, WhatsApp, e-wallet.
+- **Integrasi**: Satu Sehat, BPJS, e-wallet, WhatsApp.
 
 ---
 
 ## 5. Asumsi dan Kendala
 ### 5.1 Asumsi
-- Call Center Agents have access to stable internet.
+- Call Center Agents have stable internet.
 - WhatsApp Business API supports high-volume messaging.
 - Satu Sehat webhooks supported by hospitals.
+- Clients provide valid NPWP for tax compliance.
 
 ### 5.2 Kendala
 - Call Center Apps integration with multiple channels.
 - High-volume interaction logging performance.
-- Cost of WhatsApp API and Satu Sehat integration.
+- Cost of e-wallet, WhatsApp API, Satu Sehat integration.
 
 ---
 
@@ -128,6 +171,7 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 | Call Center Apps complexity | Delayed implementation | Reuse portal frameworks, modular design |
 | High-volume interaction logs | Performance issues | Redis caching, optimized database |
 | Missing BRD for Call Center | Misalignment | Draft BRD-CallCenter within 4 weeks |
+| E-wallet integration delays | Payment disruptions | Early testing with Midtrans, Xendit, DOKU |
 
 ---
 
@@ -137,11 +181,11 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 - **Backend**: Next.js API Routes, Prisma, PostgreSQL.
 - **Mobile**: React Native for Member/Hospital Apps.
 - **Integrasi**: Satu Sehat webhooks, WhatsApp Business API, HL7/FHIR.
-- **Call Center**: Web app with real-time logging, WhatsApp API integration.
+- **Call Center**: Web app with real-time logging, e-wallet integration.
 
 ### 7.2 Tahapan Pengembangan
 - **Fase 1-5 (COMPLETED)**: Manajemen Pengguna, Anggota, Polis, Klaim, Penyedia.
-- **Fase 6 (START NOW, 18 weeks)**: Manajemen Keuangan (BRD-6).
+- **Fase 6 (START NOW, 18 weeks)**: Manajemen Keuangan (BRD-6, claims payments, admin fees).
 - **Fase 7 (12 months, Prioritize)**: Call Center Apps, Client Portal, Member Portal/Mobile Apps, Hospital Portal, Satu Sehat, Lexicon, WhatsApp, Local Payment, Eligibility, Fraud Detection.
 - **Fase 8 (6 months)**: Predictive Analytics, Wellness Management.
 
@@ -149,12 +193,13 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 - Draft **BRD-CallCenter**, **BRD-PortalClient**, **BRD-PortalMember**, **BRD-MobileApps**, **BRD-HospitalPortal**, **BRD-7 (Lexicon)**, **BRD-Integrations (Satu Sehat)**, **BRD-WhatsApp**, **BRD-Eligibility**, **BRD-FraudDetection** within 4-6 weeks.
 
 ### 7.3 Estimasi Sumber Daya
-- **Tim**: 3 Frontend, 3 Backend, 2 Mobile, 1 ML, 1 DevOps, 1 UI/UX, 2 QA, 1 Integration Specialist.
-- **Anggaran**: Fase 7: +60% for Call Center Apps, portals, Satu Sehat, Lexicon.
+- **Tim**: 3 Frontend, 3 Backend, 2 Mobile, 1 ML, 1 DevOps, 1 UI/UX, 2 QA, 1 Integration Specialist, 1 Business Analyst.
+- **Anggaran**: Fase 6: +30% for e-wallet, tax compliance; Fase 7: +60% for Call Center, portals, Satu Sehat.
 
 ---
 
 ## 8. Metrik Keberhasilan
+- **Claims Payments**: 95% processed < 2s via e-wallets.
 - **Call Center Apps**: 95% interactions logged < 1s, 90% inquiry resolution < 5 min.
 - **Pre-Authorization**: 95% processed < 2s via portals/call center.
 - **Pre-Hospitalization**: 90% data validated via clinical pathways.
@@ -165,6 +210,7 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 
 ## 9. Lampiran
 ### 9.1 Contoh Struktur CSV
+- **Claims Payment**: `claimId,providerId,amount,paymentDate,eWalletTransactionId,taxDetails`
 - **Call Center Log**: `interactionId,channel,callerId,timestamp,agentId,category,details,status`
 
 ### 9.2 Referensi BRD Modul
@@ -172,10 +218,10 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 |-----------|-------------|------------|-----------------|
 | Manajemen Pengguna | BRD-1 v4.2 | ✅ LIVE | RBAC + ABAC, 9 peran |
 | Manajemen Anggota | BRD-2 v3.3 | ✅ LIVE | Hierarki client, siklus member |
-| Manajemen Polis | BRD-3 v2.2 | ✅ LIVE | Unified product architecture |
+| Manajemen Polis | BRD-3 v2.2 | ✅ LIVE | Unified product architecture, admin fees |
 | Manajemen Klaim | BRD-4 | ✅ LIVE | Pre-auth, pre-hospitalization, COB |
 | Manajemen Penyedia | BRD-5 | ✅ LIVE | Capitation, provider scoring |
-| Manajemen Keuangan | BRD-6 | 📋 Ready | Billing, e-wallet, tax compliance |
+| Manajemen Keuangan | BRD-6 | 📋 Ready | Claims payments, admin fees, e-wallet, tax compliance |
 | Lexicon | BRD-7 | 📋 Planned | Health profiles, claim pathways |
 | Call Center Apps | BRD-CallCenter | 📋 Planned | Interaction logging (phone, WhatsApp, web form, direct) |
 | Hospital Portal | BRD-HospitalPortal | 📋 Planned | Pre-auth, pre-hospitalization, claims |
@@ -187,7 +233,7 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 ---
 
 ## 10. Development Priority & Roadmap
-- **Fase 6 (START NOW, 18 weeks)**: Manajemen Keuangan (BRD-6).
+- **Fase 6 (START NOW, 18 weeks)**: Manajemen Keuangan (BRD-6, claims payments, admin fees).
 - **Fase 7 (12 months, Prioritize)**: Call Center Apps, Client Portal, Member Portal/Mobile Apps, Hospital Portal, Satu Sehat, Lexicon, WhatsApp, Local Payment, Eligibility, Fraud Detection.
 - **Fase 8 (6 months)**: Predictive Analytics, Wellness Management.
 
@@ -198,9 +244,9 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 
 ## 11. Production Deployment Status
 - **Modul LIVE**: Manajemen Pengguna, Anggota, Polis, Klaim, Penyedia.
-- **Siap Pengembangan**: Manajemen Keuangan (BRD-6).
+- **Siap Pengembangan**: Manajemen Keuangan (BRD-6, claims payments, admin fees).
 - **Direncanakan**: Call Center Apps, Client Portal, Member Portal/Mobile Apps, Hospital Portal, Satu Sehat, Lexicon, etc.
-- **Pasar Indonesia**: Validasi NIK, NPWP, Satu Sehat integration.
+- **Pasar Indonesia**: Validasi NIK, NPWP, Satu Sehat integration, BPJS.
 
 ---
 
