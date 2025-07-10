@@ -7,7 +7,7 @@ Minimal implementation demonstrating core AI capabilities
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-import pandas as pd
+# import pandas as pd  # Removed to avoid dependency issues
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
