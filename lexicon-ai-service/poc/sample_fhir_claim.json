@@ -1,0 +1,7 @@
+{
+  "resourceType": "Claim",
+  "id": "CLAIM-DBD-001",
+  "patient_reference": "Patient/PAT-MANADO-001",
+  "diagnosis_codes": ["A90"],
+  "procedure_codes": ["87.44", "90.05"]
+}

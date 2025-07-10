@@ -1,0 +1,210 @@
+version: '3.8'
+
+services:
+  # ===================================================================
+  # DATABASE SERVICES
+  # ===================================================================
+  
+  postgres:
+    image: postgres:14
+    container_name: lexicon-postgres
+    environment:
+      POSTGRES_DB: lexicon_ai
+      POSTGRES_USER: lexicon_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lexicon_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - lexicon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lexicon_user -d lexicon_ai"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: lexicon-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - lexicon-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===================================================================
+  # APPLICATION SERVICES
+  # ===================================================================
+  
+  lexicon-api:
+    build:
+      context: ../
+      dockerfile: deployment/Dockerfile
+    container_name: lexicon-api
+    environment:
+      # Database
+      DATABASE_URL: postgresql://lexicon_user:${POSTGRES_PASSWORD:-lexicon_pass}@postgres:5432/lexicon_ai
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_WORKERS: 4
+      
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      API_KEY_HEADER: X-API-Key
+      
+      # AI/ML Configuration
+      ML_MODEL_PATH: /app/models
+      ML_BATCH_SIZE: 1000
+      ML_LEARNING_RATE: 0.001
+      
+      # External APIs
+      TPA_API_URL: ${TPA_API_URL:-http://tpa-system:3000/api}
+      TPA_API_KEY: ${TPA_API_KEY}
+      
+      # Monitoring
+      LOG_LEVEL: INFO
+      ENABLE_METRICS: true
+      
+    ports:
+      - "8000:8000"
+    volumes:
+      - ml_models:/app/models
+      - app_logs:/app/logs
+    networks:
+      - lexicon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ===================================================================
+  # ML TRAINING SERVICE
+  # ===================================================================
+  
+  ml-trainer:
+    build:
+      context: ../
+      dockerfile: deployment/Dockerfile.ml
+    container_name: lexicon-ml-trainer
+    environment:
+      DATABASE_URL: postgresql://lexicon_user:${POSTGRES_PASSWORD:-lexicon_pass}@postgres:5432/lexicon_ai
+      REDIS_URL: redis://redis:6379/1
+      ML_MODEL_PATH: /app/models
+      TRAINING_SCHEDULE: "0 2 * * *"  # Daily at 2 AM
+    volumes:
+      - ml_models:/app/models
+      - training_data:/app/data
+    networks:
+      - lexicon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ===================================================================
+  # MONITORING SERVICES
+  # ===================================================================
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lexicon-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - lexicon-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lexicon-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - lexicon-network
+
+  # ===================================================================
+  # REVERSE PROXY
+  # ===================================================================
+  
+  nginx:
+    image: nginx:alpine
+    container_name: lexicon-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - nginx_logs:/var/log/nginx
+    networks:
+      - lexicon-network
+    depends_on:
+      - lexicon-api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  ml_models:
+    driver: local
+  training_data:
+    driver: local
+  app_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  lexicon-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

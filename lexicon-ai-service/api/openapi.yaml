@@ -1,0 +1,620 @@
+openapi: 3.0.3
+info:
+  title: Lexicon AI Service API
+  description: Medical Intelligence Platform - Clinical Decision Support APIs
+  version: 1.0.0
+  contact:
+    name: Development Team
+    email: dev@company.com
+
+servers:
+  - url: https://lexicon-api.company.com/api/v1
+    description: Production server
+  - url: http://localhost:8000/api/v1
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ===================================================================
+  # MODULE 1: MEDICAL CONCEPT LEXICON
+  # ===================================================================
+  
+  /concepts:
+    get:
+      summary: Search medical concepts
+      tags: [Concepts]
+      parameters:
+        - name: q
+          in: query
+          description: Search query
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Concept type filter
+          schema:
+            type: string
+            enum: [DIAGNOSIS, PROCEDURE, MEDICATION, LAB_TEST]
+        - name: status
+          in: query
+          description: Status filter
+          schema:
+            type: string
+            enum: [Active, Pending Review, Deprecated]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of concepts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Concept'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+    post:
+      summary: Create new concept
+      tags: [Concepts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConceptCreate'
+      responses:
+        '201':
+          description: Concept created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Concept'
+
+  /concepts/{conceptId}:
+    get:
+      summary: Get concept details
+      tags: [Concepts]
+      parameters:
+        - name: conceptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Concept details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConceptDetail'
+
+    put:
+      summary: Update concept
+      tags: [Concepts]
+      parameters:
+        - name: conceptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConceptUpdate'
+      responses:
+        '200':
+          description: Concept updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Concept'
+
+  /mapping/{system}/{code}:
+    get:
+      summary: Map external code to concept
+      tags: [Mapping]
+      parameters:
+        - name: system
+          in: path
+          required: true
+          description: Coding system (ICD-10, SNOMED, etc.)
+          schema:
+            type: string
+        - name: code
+          in: path
+          required: true
+          description: External code value
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mapped concept
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConceptMapping'
+
+  /search:
+    get:
+      summary: Global fuzzy search
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query (supports fuzzy matching)
+          schema:
+            type: string
+        - name: language
+          in: query
+          description: Language preference
+          schema:
+            type: string
+            enum: [en, id]
+            default: id
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchResult'
+
+  # ===================================================================
+  # MODULE 2: ENCOUNTER PROCESSING
+  # ===================================================================
+
+  /fhir/claims:
+    post:
+      summary: Process FHIR claim
+      tags: [FHIR]
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/FHIRClaim'
+      responses:
+        '200':
+          description: Claim processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimProcessingResult'
+
+  /encounters/{encounterId}:
+    get:
+      summary: Get encounter details
+      tags: [Encounters]
+      parameters:
+        - name: encounterId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Encounter details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encounter'
+
+  # ===================================================================
+  # MODULE 3: CLINICAL DECISION SUPPORT
+  # ===================================================================
+
+  /cds/recommendations:
+    post:
+      summary: Get clinical recommendations
+      tags: [Clinical Decision Support]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalRequest'
+      responses:
+        '200':
+          description: Clinical recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicalRecommendations'
+
+  /cds/validate:
+    post:
+      summary: Validate treatment plan
+      tags: [Clinical Decision Support]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreatmentPlan'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+  /cds/pathway/{diagnosisId}:
+    get:
+      summary: Get clinical pathway
+      tags: [Clinical Decision Support]
+      parameters:
+        - name: diagnosisId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: location
+          in: query
+          schema:
+            type: string
+        - name: season
+          in: query
+          schema:
+            type: string
+            enum: [DRY, WET]
+      responses:
+        '200':
+          description: Clinical pathway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicalPathway'
+
+  /graphql:
+    post:
+      summary: GraphQL endpoint
+      tags: [GraphQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                variables:
+                  type: object
+      responses:
+        '200':
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                type: object
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Concept:
+      type: object
+      properties:
+        concept_id:
+          type: integer
+        human_readable_code:
+          type: string
+        canonical_name:
+          type: string
+        concept_type:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ConceptDetail:
+      allOf:
+        - $ref: '#/components/schemas/Concept'
+        - type: object
+          properties:
+            definition:
+              type: string
+            synonyms:
+              type: array
+              items:
+                $ref: '#/components/schemas/Synonym'
+            code_mappings:
+              type: array
+              items:
+                $ref: '#/components/schemas/CodeMapping'
+            relationships:
+              type: array
+              items:
+                $ref: '#/components/schemas/Relationship'
+
+    ConceptCreate:
+      type: object
+      required:
+        - canonical_name
+        - concept_type
+      properties:
+        canonical_name:
+          type: string
+        definition:
+          type: string
+        concept_type:
+          type: string
+          enum: [DIAGNOSIS, PROCEDURE, MEDICATION, LAB_TEST]
+
+    ConceptUpdate:
+      type: object
+      properties:
+        canonical_name:
+          type: string
+        definition:
+          type: string
+        status:
+          type: string
+          enum: [Active, Pending Review, Deprecated]
+
+    Synonym:
+      type: object
+      properties:
+        term:
+          type: string
+        language_code:
+          type: string
+        term_type:
+          type: string
+
+    CodeMapping:
+      type: object
+      properties:
+        coding_system_name:
+          type: string
+        code_value:
+          type: string
+        code_description:
+          type: string
+
+    ConceptMapping:
+      type: object
+      properties:
+        concept:
+          $ref: '#/components/schemas/Concept'
+        mapping_confidence:
+          type: number
+          format: float
+
+    SearchResult:
+      type: object
+      properties:
+        concept:
+          $ref: '#/components/schemas/Concept'
+        match_score:
+          type: number
+          format: float
+        matched_terms:
+          type: array
+          items:
+            type: string
+
+    ClinicalRequest:
+      type: object
+      required:
+        - diagnosis_concept_id
+      properties:
+        diagnosis_concept_id:
+          type: integer
+        patient_context:
+          $ref: '#/components/schemas/PatientContext'
+
+    PatientContext:
+      type: object
+      properties:
+        age_group:
+          type: string
+        gender:
+          type: string
+          enum: [M, F]
+        location:
+          type: string
+        season:
+          type: string
+          enum: [DRY, WET]
+        outbreak_period:
+          type: boolean
+
+    ClinicalRecommendations:
+      type: object
+      properties:
+        diagnosis:
+          $ref: '#/components/schemas/Concept'
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        contextual_insights:
+          $ref: '#/components/schemas/ContextualInsights'
+
+    Recommendation:
+      type: object
+      properties:
+        concept:
+          $ref: '#/components/schemas/Concept'
+        relationship_type:
+          type: string
+        priority_score:
+          type: number
+          format: float
+        confidence_score:
+          type: number
+          format: float
+        median_cost:
+          type: number
+        success_rate:
+          type: number
+          format: float
+
+    TreatmentPlan:
+      type: object
+      properties:
+        diagnosis_concept_id:
+          type: integer
+        procedures:
+          type: array
+          items:
+            type: integer
+        medications:
+          type: array
+          items:
+            type: integer
+
+    ValidationResult:
+      type: object
+      properties:
+        is_valid:
+          type: boolean
+        confidence:
+          type: number
+          format: float
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Suggestion'
+
+    ValidationIssue:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        message:
+          type: string
+        concept_id:
+          type: integer
+
+    Suggestion:
+      type: object
+      properties:
+        type:
+          type: string
+        concept:
+          $ref: '#/components/schemas/Concept'
+        reason:
+          type: string
+
+    ClinicalPathway:
+      type: object
+      properties:
+        diagnosis:
+          $ref: '#/components/schemas/Concept'
+        treatments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        diagnostic_tests:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        contextual_insights:
+          $ref: '#/components/schemas/ContextualInsights'
+
+    ContextualInsights:
+      type: object
+      properties:
+        location_specific_notes:
+          type: string
+        seasonal_recommendations:
+          type: string
+        cost_variations:
+          type: string
+
+    FHIRClaim:
+      type: object
+      description: FHIR R4 Claim resource
+      # Simplified - full FHIR schema would be much larger
+
+    ClaimProcessingResult:
+      type: object
+      properties:
+        encounter_id:
+          type: integer
+        mapped_concepts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConceptMapping'
+        validation_result:
+          $ref: '#/components/schemas/ValidationResult'
+        ai_recommendations:
+          $ref: '#/components/schemas/ClinicalRecommendations'
+
+    Encounter:
+      type: object
+      properties:
+        encounter_id:
+          type: integer
+        encounter_date:
+          type: string
+          format: date
+        encounter_type:
+          type: string
+        patient_demographics:
+          $ref: '#/components/schemas/PatientContext'
+        concepts:
+          type: array
+          items:
+            $ref: '#/components/schemas/EncounterConcept'
+
+    EncounterConcept:
+      type: object
+      properties:
+        concept:
+          $ref: '#/components/schemas/Concept'
+        concept_role:
+          type: string
+        cost_amount:
+          type: number
+
+    Relationship:
+      type: object
+      properties:
+        target_concept:
+          $ref: '#/components/schemas/Concept'
+        relationship_type:
+          type: string
+        priority_score:
+          type: number
+          format: float
+        total_encounters:
+          type: integer
