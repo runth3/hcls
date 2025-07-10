@@ -136,9 +136,9 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 - **Fitur**: HL7/FHIR, Satu Sehat webhooks for pre-auth/pre-hospitalization data, logged in Call Center Apps.
 - **BRD**: BRD-Integrations.
 
-#### 3.1.7 Modul Lexicon (📋 Planned)
-- **Fitur**: Health profiles, claim pathway management (pre-auth, pre-hospitalization). Interaksi logged via Call Center Apps.
-- **BRD**: BRD-7.
+#### 3.1.7 Modul ML-CDS Lexicon (📋 Planned)
+- **Fitur**: AI-powered medical lexicons (ICD-10/11, SNOMED, CPT), semantic cross-mapping, GraphQL relationship engine, ML-based clinical decision support, treatment outcome prediction.
+- **BRD**: BRD-8-ML-CDS-Lexicon.
 
 ---
 
@@ -222,7 +222,7 @@ Platform terpusat untuk mengelola hubungan antara client, sub-client, HR manager
 | Manajemen Klaim | BRD-4 | ✅ LIVE | Pre-auth, pre-hospitalization, COB |
 | Manajemen Penyedia | BRD-5 | ✅ LIVE | Capitation, provider scoring |
 | Manajemen Keuangan | BRD-6 | 📋 Ready | Claims payments, admin fees, e-wallet, tax compliance |
-| Lexicon | BRD-7 | 📋 Planned | Health profiles, claim pathways |
+| ML-CDS Lexicon | BRD-8 | 📋 Planned | AI medical lexicons, semantic mapping, clinical decision support |
 | Call Center Apps | BRD-CallCenter | 📋 Planned | Interaction logging (phone, WhatsApp, web form, direct) |
 | Hospital Portal | BRD-HospitalPortal | 📋 Planned | Pre-auth, pre-hospitalization, claims |
 | Portal Client | BRD-PortalClient | 📋 Planned | Member management, pre-auth monitoring |

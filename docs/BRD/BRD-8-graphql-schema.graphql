@@ -1,0 +1,193 @@
+# GraphQL Schema for Clinical Decision Support
+
+type MedicalConcept {
+  concept_id: ID!
+  canonical_name: String!
+  indonesian_name: String!
+  concept_type: ConceptType!
+  general_terms: [String!]!
+  code_mappings: [String!]!
+  
+  # Relationships
+  treatments: [ClinicalRelationship!]! @relation(type: "HAS_TREATMENT")
+  diagnosticTests: [ClinicalRelationship!]! @relation(type: "HAS_DIAGNOSTIC_TEST")
+  symptoms: [ClinicalRelationship!]! @relation(type: "HAS_SYMPTOM")
+  treatedBy: [ClinicalRelationship!]! @relation(type: "TREATED_BY")
+}
+
+type ClinicalRelationship {
+  pairing_id: ID!
+  source_concept: MedicalConcept!
+  target_concept: MedicalConcept!
+  relationship_type: RelationshipType!
+  
+  # AI Scores
+  priority_score: Float!
+  commonality_score: Float!
+  evidence_level_score: Float!
+  confidence_score: Float!
+  
+  # Financial Data
+  median_cost: Int
+  cost_range: CostRange
+  
+  # Evidence
+  total_encounters: Int!
+  success_rate: Float
+  
+  # Contextual Intelligence
+  contextual_scores: [ContextualScore!]!
+}
+
+type ContextualScore {
+  context_type: ContextType!
+  context_value: String!
+  commonality_score: Float!
+  encounter_count: Int!
+}
+
+type CostRange {
+  min_cost: Int!
+  max_cost: Int!
+  median_cost: Int!
+}
+
+enum ConceptType {
+  DIAGNOSIS
+  PROCEDURE
+  MEDICATION
+  SYMPTOM
+  LAB_TEST
+  BODY_STRUCTURE
+  ORGANISM
+  SUBSTANCE
+  QUALIFIER
+}
+
+enum RelationshipType {
+  HAS_TREATMENT
+  HAS_DIAGNOSTIC_TEST
+  HAS_SYMPTOM
+  TREATED_BY
+  REQUIRES_MEDICATION
+  NEEDS_IMAGING
+  CONTRAINDICATED_WITH
+  ALTERNATIVE_TO
+  IS_A
+}
+
+enum ContextType {
+  LOCATION
+  SEASON
+  AGE_GROUP
+  PROVIDER_TYPE
+  OUTBREAK_PERIOD
+}
+
+type Query {
+  # Get concept by ID
+  getConcept(concept_id: ID!): MedicalConcept
+  
+  # Search concepts
+  searchConcepts(
+    query: String!
+    concept_type: ConceptType
+    limit: Int = 10
+  ): [MedicalConcept!]!
+  
+  # Get clinical pathway for diagnosis
+  getClinicalPathway(
+    diagnosis_concept_id: ID!
+    context: ClinicalContext
+  ): ClinicalPathway!
+  
+  # Get treatment recommendations
+  getTreatmentRecommendations(
+    diagnosis_concept_id: ID!
+    context: ClinicalContext
+    limit: Int = 5
+  ): [TreatmentRecommendation!]!
+}
+
+input ClinicalContext {
+  location: String
+  season: String
+  age_group: String
+  provider_type: String
+  outbreak_period: Boolean
+}
+
+type ClinicalPathway {
+  diagnosis: MedicalConcept!
+  primary_treatments: [TreatmentRecommendation!]!
+  diagnostic_tests: [DiagnosticRecommendation!]!
+  common_symptoms: [SymptomAssociation!]!
+  contextual_insights: ContextualInsights!
+}
+
+type TreatmentRecommendation {
+  treatment: MedicalConcept!
+  priority_score: Float!
+  commonality_score: Float!
+  evidence_level_score: Float!
+  median_cost: Int
+  success_rate: Float
+  contextual_notes: String
+}
+
+type DiagnosticRecommendation {
+  test: MedicalConcept!
+  priority_score: Float!
+  commonality_score: Float!
+  median_cost: Int
+  necessity_level: String!
+}
+
+type SymptomAssociation {
+  symptom: MedicalConcept!
+  commonality_score: Float!
+  typical_severity: String
+}
+
+type ContextualInsights {
+  location_specific_notes: String
+  seasonal_recommendations: String
+  age_group_considerations: String
+  cost_variations: String
+}
+
+# Example Queries:
+
+# 1. Get DBD treatment pathway
+# query {
+#   getClinicalPathway(
+#     diagnosis_concept_id: "DIAG-DBD-001"
+#     context: { location: "Manado", season: "WET" }
+#   ) {
+#     diagnosis { canonical_name, indonesian_name }
+#     primary_treatments {
+#       treatment { canonical_name, indonesian_name }
+#       priority_score
+#       median_cost
+#     }
+#     diagnostic_tests {
+#       test { canonical_name }
+#       priority_score
+#       necessity_level
+#     }
+#   }
+# }
+
+# 2. Get hypertension treatments
+# query {
+#   getTreatmentRecommendations(
+#     diagnosis_concept_id: "DIAG-HYPTN-001"
+#     context: { age_group: "45-50", location: "Jakarta" }
+#   ) {
+#     treatment { canonical_name, indonesian_name }
+#     priority_score
+#     commonality_score
+#     evidence_level_score
+#     contextual_notes
+#   }
+# }
